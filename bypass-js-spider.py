@@ -45,7 +45,7 @@ class AntiDetectCrawler:
         # 随机用户代理
         user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.{}.{} Safari/537.36".format(
-                random.randint(90, 120), random.randint(1000, 9999), random.randint(100, 999)
+                random.randint(90, 120), random.randint(1000, 9999), random.randint(100, 999))
             for _ in range(5)
         ]
         options.add_argument(f"user-agent={random.choice(user_agents)}")
@@ -114,9 +114,10 @@ class AntiDetectCrawler:
             self._wait_for_js_validation()
             self._human_like_interaction()
             
-            # 确保内容加载
+            # 确保内容加载（修正了这里的语法错误）
             self.wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
+            )
             time.sleep(random.uniform(1, 2))
             
             # 获取动态渲染后的页面源码
@@ -142,6 +143,7 @@ class AntiDetectCrawler:
         try:
             items = self.wait.until(
                 EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".product"))
+            )
             
             for item in items:
                 try:
@@ -170,7 +172,7 @@ if __name__ == "__main__":
     crawler = AntiDetectCrawler()
     try:
         # 示例爬取
-        target_url = "http://127.0.0.1"
+        target_url = "http://cctest.weibeian.top"
         result = crawler.crawl_page(target_url)
         
         if result:
