@@ -1,7 +1,6 @@
 from flask import Flask, render_template_string, request
 import random
 from datetime import datetime, timedelta
-import time
 
 app = Flask(__name__)
 
@@ -59,8 +58,8 @@ class Database:
 
 db = Database()
 
-# HTML模板
-HTML_TEMPLATE = """
+# 基础模板
+BASE_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -95,10 +94,9 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# 路由定义
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE + """
+    return render_template_string(BASE_TEMPLATE + """
     {% extends "base" %}
     {% block content %}
         <h2>欢迎来到测试平台</h2>
@@ -131,8 +129,7 @@ def product_list():
     total_pages = (len(db.products) + per_page - 1) // per_page
     paginated_products = db.products[(page-1)*per_page : page*per_page]
     
-    return render_template_string(HTML_TEMPLATE + """
-    {% extends "base" %}
+    return render_template_string(BASE_TEMPLATE + """
     {% block content %}
         <h2>产品列表</h2>
         {% for p in products %}
@@ -159,8 +156,7 @@ def product_detail(id):
     product = next((p for p in db.products if p['id'] == id), None)
     if not product:
         return "产品不存在", 404
-    return render_template_string(HTML_TEMPLATE + """
-    {% extends "base" %}
+    return render_template_string(BASE_TEMPLATE + """
     {% block content %}
         <h2>{{ product.name }}</h2>
         <div class="product">
@@ -178,7 +174,5 @@ def product_detail(id):
     {% endblock %}
     """, product=product)
 
-# 其他路由：/news, /news/<id>, /users 类似实现...
-
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
