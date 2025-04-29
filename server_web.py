@@ -58,8 +58,8 @@ class Database:
 
 db = Database()
 
-# 基础模板
-BASE_TEMPLATE = """
+# 基础模板字符串
+BASE_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
 <head>
@@ -92,35 +92,39 @@ BASE_TEMPLATE = """
     </div>
 </body>
 </html>
-"""
+'''
+
+def render_with_base(content):
+    """辅助函数：将内容插入基础模板"""
+    return BASE_TEMPLATE + content
 
 @app.route('/')
 def index():
-    return render_template_string(BASE_TEMPLATE + """
-    {% extends "base" %}
-    {% block content %}
-        <h2>欢迎来到测试平台</h2>
-        <p>这是一个用于爬虫练习的模拟云计算服务平台</p>
-        <div>
-            <h3>最新产品</h3>
-            {% for p in products[:3] %}
-            <div class="product">
-                <h4><a href="/product/{{ p.id }}">{{ p.name }}</a></h4>
-                <p>类别: {{ p.category }} | 价格: ¥{{ p.price }}</p>
-            </div>
-            {% endfor %}
+    content = '''
+    <h2>欢迎来到测试平台</h2>
+    <p>这是一个用于爬虫练习的模拟云计算服务平台</p>
+    <div>
+        <h3>最新产品</h3>
+        {% for p in products[:3] %}
+        <div class="product">
+            <h4><a href="/product/{{ p.id }}">{{ p.name }}</a></h4>
+            <p>类别: {{ p.category }} | 价格: ¥{{ p.price }}</p>
         </div>
-        <div>
-            <h3>最新新闻</h3>
-            {% for n in news[:3] %}
-            <div class="news-item">
-                <h4><a href="/news/{{ n.id }}">{{ n.title }}</a></h4>
-                <p>{{ n.publish_date }} | 作者: {{ n.author }}</p>
-            </div>
-            {% endfor %}
+        {% endfor %}
+    </div>
+    <div>
+        <h3>最新新闻</h3>
+        {% for n in news[:3] %}
+        <div class="news-item">
+            <h4><a href="/news/{{ n.id }}">{{ n.title }}</a></h4>
+            <p>{{ n.publish_date }} | 作者: {{ n.author }}</p>
         </div>
-    {% endblock %}
-    """, products=db.products, news=db.news)
+        {% endfor %}
+    </div>
+    '''
+    return render_template_string(render_with_base(content), 
+                               products=db.products, 
+                               news=db.news)
 
 @app.route('/products')
 def product_list():
@@ -129,50 +133,53 @@ def product_list():
     total_pages = (len(db.products) + per_page - 1) // per_page
     paginated_products = db.products[(page-1)*per_page : page*per_page]
     
-    return render_template_string(BASE_TEMPLATE + """
-    {% block content %}
-        <h2>产品列表</h2>
-        {% for p in products %}
-        <div class="product">
-            <h3><a href="/product/{{ p.id }}">{{ p.name }}</a></h3>
-            <p>类别: {{ p.category }} | 价格: ¥{{ p.price }} | 发布日期: {{ p.created_at }}</p>
-            <p>规格: CPU {{ p.specs.CPU }}, 内存 {{ p.specs.内存 }}, 存储 {{ p.specs.存储 }}</p>
-        </div>
-        {% endfor %}
-        <div class="pagination">
-            {% if page > 1 %}
-                <a href="/products?page={{ page-1 }}">上一页</a>
-            {% endif %}
-            第 {{ page }} 页/共 {{ total_pages }} 页
-            {% if page < total_pages %}
-                <a href="/products?page={{ page+1 }}">下一页</a>
-            {% endif %}
-        </div>
-    {% endblock %}
-    """, products=paginated_products, page=page, total_pages=total_pages)
+    content = '''
+    <h2>产品列表</h2>
+    {% for p in products %}
+    <div class="product">
+        <h3><a href="/product/{{ p.id }}">{{ p.name }}</a></h3>
+        <p>类别: {{ p.category }} | 价格: ¥{{ p.price }} | 发布日期: {{ p.created_at }}</p>
+        <p>规格: CPU {{ p.specs.CPU }}, 内存 {{ p.specs.内存 }}, 存储 {{ p.specs.存储 }}</p>
+    </div>
+    {% endfor %}
+    <div class="pagination">
+        {% if page > 1 %}
+            <a href="/products?page={{ page-1 }}">上一页</a>
+        {% endif %}
+        第 {{ page }} 页/共 {{ total_pages }} 页
+        {% if page < total_pages %}
+            <a href="/products?page={{ page+1 }}">下一页</a>
+        {% endif %}
+    </div>
+    '''
+    return render_template_string(render_with_base(content),
+                               products=paginated_products,
+                               page=page,
+                               total_pages=total_pages)
 
 @app.route('/product/<int:id>')
 def product_detail(id):
     product = next((p for p in db.products if p['id'] == id), None)
     if not product:
         return "产品不存在", 404
-    return render_template_string(BASE_TEMPLATE + """
-    {% block content %}
-        <h2>{{ product.name }}</h2>
-        <div class="product">
-            <p><strong>类别:</strong> {{ product.category }}</p>
-            <p><strong>价格:</strong> ¥{{ product.price }}</p>
-            <p><strong>规格:</strong> 
-                CPU {{ product.specs.CPU }}, 
-                内存 {{ product.specs.内存 }}, 
-                存储 {{ product.specs.存储 }}
-            </p>
-            <p><strong>描述:</strong> {{ product.description }}</p>
-            <p><strong>上架时间:</strong> {{ product.created_at }}</p>
-        </div>
-        <a href="/products">返回产品列表</a>
-    {% endblock %}
-    """, product=product)
+    
+    content = '''
+    <h2>{{ product.name }}</h2>
+    <div class="product">
+        <p><strong>类别:</strong> {{ product.category }}</p>
+        <p><strong>价格:</strong> ¥{{ product.price }}</p>
+        <p><strong>规格:</strong> 
+            CPU {{ product.specs.CPU }}, 
+            内存 {{ product.specs.内存 }}, 
+            存储 {{ product.specs.存储 }}
+        </p>
+        <p><strong>描述:</strong> {{ product.description }}</p>
+        <p><strong>上架时间:</strong> {{ product.created_at }}</p>
+    </div>
+    <a href="/products">返回产品列表</a>
+    '''
+    return render_template_string(render_with_base(content),
+                               product=product)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
