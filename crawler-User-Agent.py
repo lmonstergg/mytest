@@ -1,174 +1,186 @@
-import requests
-from bs4 import BeautifulSoup
-import json
-import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 import random
+import time
+import logging
+import json
 from urllib.parse import urljoin
+import undetected_chromedriver as uc  # 需要安装：pip install undetected-chromedriver
 
-# 添加的User-Agent列表
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
-]
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
-def get_random_headers():
-    """生成随机请求头"""
-    return {
-        'User-Agent': random.choice(USER_AGENTS),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-    }
-
-BASE_URL = "http://127.0.0.1:5000"
-
-def crawl_website():
-    print("=== 开始爬取测试网站数据 ===")
-    
-    # 1. 爬取产品数据
-    products = crawl_paginated_data("/products", "product", {
-        "name": lambda div: div.find("h3").get_text(strip=True),
-        "link": lambda div: urljoin(BASE_URL, div.find("a")["href"]),
-        "category": lambda div: extract_field(div, "类别:"),
-        "price": lambda div: extract_field(div, "价格:"),
-        "specs": lambda div: {
-            "CPU": extract_spec(div, "CPU"),
-            "内存": extract_spec(div, "内存"),
-            "存储": extract_spec(div, "存储")
-        },
-        "created_at": lambda div: extract_field(div, "上架时间:")
-    })
-    save_to_file(products, "products.json")
-    
-    # 2. 爬取新闻数据
-    news = crawl_paginated_data("/news", "news-item", {
-        "title": lambda div: div.find("h3").get_text(strip=True),
-        "link": lambda div: urljoin(BASE_URL, div.find("a")["href"]),
-        "publish_date": lambda div: extract_field(div, "日期:"),
-        "author": lambda div: extract_field(div, "作者:"),
-        "views": lambda div: int(extract_field(div, "浏览量:"))
-    })
-    save_to_file(news, "news.json")
-    
-    # 3. 爬取用户数据
-    users = []
-    print("\n=== 爬取用户数据 ===")
-    try:
-        # 添加随机User-Agent
-        response = requests.get(
-            urljoin(BASE_URL, "/users"), 
-            headers=get_random_headers()
+class AntiDetectCrawler:
+    def __init__(self):
+        self.driver = self._init_stealth_driver()
+        self.wait = WebDriverWait(self.driver, 15)
+        
+    def _init_stealth_driver(self):
+        """初始化防检测浏览器驱动"""
+        options = Options()
+        
+        # 反检测核心配置
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+        
+        # 常规无头模式配置
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        
+        # 随机用户代理
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.{}.{} Safari/537.36".format(
+                random.randint(90, 120), random.randint(1000, 9999), random.randint(100, 999))
+            for _ in range(5)
+        ]
+        options.add_argument(f"user-agent={random.choice(user_agents)}")
+        
+        # 使用undetected-chromedriver增强隐蔽性
+        driver = uc.Chrome(
+            service=Service('/usr/local/bin/chromedriver'),
+            options=options,
+            version_main=114  # 与安装的ChromeDriver主版本一致
         )
-        soup = BeautifulSoup(response.text, 'html.parser')
         
-        rows = soup.select("table tbody tr")
-        for row in rows:
-            cols = row.find_all("td")
-            if len(cols) >= 6:
-                user_id = cols[0].get_text(strip=True)
-                users.append({
-                    "id": int(user_id),
-                    "username": cols[1].get_text(strip=True),
-                    "name": cols[2].get_text(strip=True),
-                    "role": cols[3].get_text(strip=True),
-                    "department": cols[4].get_text(strip=True),
-                    "register_date": cols[5].get_text(strip=True),
-                    "detail_link": urljoin(BASE_URL, f"/user/{user_id}")
-                })
-        
-        # 爬取用户详情 (只爬取前3个作为示例)
-        for user in users[:3]:
-            user_detail = crawl_user_detail(user["detail_link"])
-            user.update(user_detail)
-            time.sleep(1)  # 添加延迟
-        
-        save_to_file(users, "users.json")
-    except Exception as e:
-        print(f"爬取用户数据失败: {e}")
+        # 修改navigator属性
+        driver.execute_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
+        return driver
     
-    print("\n=== 爬取完成 ===")
-
-def crawl_paginated_data(base_path, item_class, field_extractors):
-    print(f"\n=== 开始爬取 {base_path} ===")
-    data = []
-    page = 1
-    
-    while True:
-        url = urljoin(BASE_URL, f"{base_path}?page={page}")
-        print(f"正在爬取: {url}")
+    def _human_like_interaction(self):
+        """模拟人类交互行为"""
+        # 随机滚动
+        for _ in range(random.randint(2, 5)):
+            scroll_px = random.randint(200, 800)
+            self.driver.execute_script(f"window.scrollBy(0, {scroll_px})")
+            time.sleep(random.uniform(0.5, 1.5))
         
+        # 随机鼠标移动
+        actions = ActionChains(self.driver)
+        for _ in range(random.randint(3, 7)):
+            x_offset = random.randint(-50, 50)
+            y_offset = random.randint(-50, 50)
+            actions.move_by_offset(x_offset, y_offset).perform()
+            time.sleep(random.uniform(0.1, 0.3))
+        
+        # 随机键盘操作
+        body = self.wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
+        for _ in range(random.randint(1, 3)):
+            body.send_keys(Keys.PAGE_DOWN)
+            time.sleep(random.uniform(0.2, 0.5))
+    
+    def _wait_for_js_validation(self):
+        """处理JS验证"""
         try:
-            # 添加随机User-Agent
-            response = requests.get(
-                url,
-                headers=get_random_headers()
+            # 等待可能出现的验证元素
+            self.wait.until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
             )
-            soup = BeautifulSoup(response.text, 'html.parser')
+            time.sleep(random.uniform(1, 3))
             
-            items = soup.select(f".{item_class}")
-            for item in items:
-                item_data = {}
-                for field, extractor in field_extractors.items():
-                    try:
-                        item_data[field] = extractor(item)
-                    except Exception as e:
-                        print(f"提取字段 {field} 失败: {e}")
-                        item_data[field] = None
-                data.append(item_data)
+            # 检查是否有验证框架
+            if len(self.driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha'], .geetest_holder")) > 0:
+                logger.warning("检测到验证码框架，尝试绕过...")
+                time.sleep(5)
+                self.driver.execute_script("window.scrollBy(0, 500)")
+                time.sleep(2)
+                
+        except Exception as e:
+            logger.warning(f"JS验证等待异常: {str(e)}")
+    
+    def crawl_page(self, url):
+        """爬取目标页面"""
+        try:
+            logger.info(f"正在访问: {url}")
+            self.driver.get(url)
             
-            # 检查是否有下一页
-            next_page = soup.select_one('.pagination a[href*="page="]:contains("下一页")')
-            if not next_page:
-                break
-            page += 1
-            time.sleep(1)  # 添加延迟
+            # 处理验证和模拟行为
+            self._wait_for_js_validation()
+            self._human_like_interaction()
+            
+            # 确保内容加载（修正了这里的语法错误）
+            self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
+            )
+            time.sleep(random.uniform(1, 2))
+            
+            # 获取动态渲染后的页面源码
+            rendered_html = self.driver.page_source
+            
+            # 提取数据示例
+            data = {
+                "title": self.driver.title,
+                "url": self.driver.current_url,
+                "products": self._extract_products(),
+                "timestamp": int(time.time())
+            }
+            
+            return data
             
         except Exception as e:
-            print(f"爬取失败: {e}")
-            break
+            logger.error(f"页面爬取失败: {str(e)}")
+            return None
     
-    print(f"已获取 {len(data)} 条数据")
-    return data
-
-def crawl_user_detail(url):
-    try:
-        # 添加随机User-Agent
-        response = requests.get(
-            url,
-            headers=get_random_headers()
-        )
-        soup = BeautifulSoup(response.text, 'html.parser')
+    def _extract_products(self):
+        """提取产品数据"""
+        products = []
+        try:
+            items = self.wait.until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".product"))
+            )
+            
+            for item in items:
+                try:
+                    product_data = {
+                        "name": item.find_element(By.CSS_SELECTOR, "h3").text,
+                        "price": item.find_element(By.CSS_SELECTOR, ".price").text,
+                        "link": item.find_element(By.CSS_SELECTOR, "a").get_attribute("href"),
+                        # 添加更多字段...
+                    }
+                    products.append(product_data)
+                except Exception as e:
+                    logger.warning(f"产品提取失败: {str(e)}")
+                    continue
+                    
+        except Exception as e:
+            logger.warning(f"产品列表提取失败: {str(e)}")
         
-        detail = {
-            "email": extract_field(soup, "邮箱:"),
-            "phone": extract_field(soup, "电话:"),
-            "last_login": extract_field(soup, "最后登录:")
-        }
-        return detail
-    except Exception as e:
-        print(f"爬取用户详情失败: {e}")
-        return {}
+        return products
+    
+    def close(self):
+        """关闭浏览器"""
+        self.driver.quit()
+        logger.info("浏览器已关闭")
 
-def extract_field(container, label):
+if __name__ == "__main__":
+    crawler = AntiDetectCrawler()
     try:
-        return container.get_text(strip=True).split(label)[-1].split("|")[0].strip()
-    except:
-        return ""
-
-def extract_spec(container, spec_name):
-    try:
-        return container.get_text(strip=True).split(spec_name)[-1].split(",")[0].strip()
-    except:
-        return ""
-
-def save_to_file(data, filename):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"数据已保存到 {filename}")
-
-if __name__ == '__main__':
-    crawl_website()
+        # 示例爬取
+        target_url = "http://cctest.weibeian.top"
+        result = crawler.crawl_page(target_url)
+        
+        if result:
+            logger.info(f"成功爬取数据: {json.dumps(result, indent=2, ensure_ascii=False)}")
+            with open("crawler_results.json", "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+        else:
+            logger.error("爬取失败，未获取有效数据")
+            
+    finally:
+        crawler.close()
