@@ -1,142 +1,184 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
-import time
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 import random
+import time
+import logging
 import json
-import os
 from urllib.parse import urljoin
+import undetected_chromedriver as uc  # 需要安装：pip install undetected-chromedriver
 
-# 配置参数
-BASE_URL = "http://127.0.0.1:5000"
-OUTPUT_DIR = "output"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
-# 随机User-Agent列表
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
-]
-
-def init_driver():
-    """初始化Selenium WebDriver"""
-    chrome_options = Options()
-    chrome_options.add_argument(f"user-agent={random.choice(USER_AGENTS)}")
-    chrome_options.add_argument("--headless")  # 无头模式
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    
-    # 添加其他反检测参数
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
-    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    
-    driver = webdriver.Chrome(options=chrome_options)
-    
-    # 修改WebDriver属性以防检测
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-    
-    return driver
-
-def simulate_human_interaction(driver):
-    """模拟人类交互行为"""
-    # 随机滚动
-    scroll_height = random.randint(200, 1000)
-    driver.execute_script(f"window.scrollTo(0, {scroll_height})")
-    time.sleep(random.uniform(0.5, 1.5))
-    
-    # 随机鼠标移动
-    actions = webdriver.ActionChains(driver)
-    actions.move_by_offset(random.randint(10, 50), random.randint(10, 50))
-    actions.perform()
-
-def wait_for_js_validation(driver, timeout=10):
-    """等待JS验证完成"""
-    try:
-        # 等待可能出现的验证元素
-        WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
+class AntiDetectCrawler:
+    def __init__(self):
+        self.driver = self._init_stealth_driver()
+        self.wait = WebDriverWait(self.driver, 15)
+        
+    def _init_stealth_driver(self):
+        """初始化防检测浏览器驱动"""
+        options = Options()
+        
+        # 反检测核心配置
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+        
+        # 常规无头模式配置
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--window-size=1920,1080")
+        
+        # 随机用户代理
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{}.0.{}.{} Safari/537.36".format(
+                random.randint(90, 120), random.randint(1000, 9999), random.randint(100, 999)
+            for _ in range(5)
+        ]
+        options.add_argument(f"user-agent={random.choice(user_agents)}")
+        
+        # 使用undetected-chromedriver增强隐蔽性
+        driver = uc.Chrome(
+            service=Service('/usr/local/bin/chromedriver'),
+            options=options,
+            version_main=114  # 与安装的ChromeDriver主版本一致
         )
-        time.sleep(random.uniform(2, 4))  # 额外等待时间
         
-        # 检查是否有验证相关的元素
-        if len(driver.find_elements(By.CSS_SELECTOR, ".js-validation")) > 0:
-            print("检测到JS验证，等待验证完成...")
-            time.sleep(5)  # 给验证留出时间
-            
-    except TimeoutException:
-        print("等待JS验证超时，继续执行...")
-
-def extract_product_data(driver):
-    """提取产品数据"""
-    products = []
-    items = driver.find_elements(By.CSS_SELECTOR, ".product")
-    for item in items:
+        # 修改navigator属性
+        driver.execute_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
+        return driver
+    
+    def _human_like_interaction(self):
+        """模拟人类交互行为"""
+        # 随机滚动
+        for _ in range(random.randint(2, 5)):
+            scroll_px = random.randint(200, 800)
+            self.driver.execute_script(f"window.scrollBy(0, {scroll_px})")
+            time.sleep(random.uniform(0.5, 1.5))
+        
+        # 随机鼠标移动
+        actions = ActionChains(self.driver)
+        for _ in range(random.randint(3, 7)):
+            x_offset = random.randint(-50, 50)
+            y_offset = random.randint(-50, 50)
+            actions.move_by_offset(x_offset, y_offset).perform()
+            time.sleep(random.uniform(0.1, 0.3))
+        
+        # 随机键盘操作
+        body = self.wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
+        for _ in range(random.randint(1, 3)):
+            body.send_keys(Keys.PAGE_DOWN)
+            time.sleep(random.uniform(0.2, 0.5))
+    
+    def _wait_for_js_validation(self):
+        """处理JS验证"""
         try:
-            products.append({
-                "name": item.find_element(By.CSS_SELECTOR, "h3").text,
-                "category": item.find_element(By.CSS_SELECTOR, ".label:contains('类别') + span").text,
-                "price": item.find_element(By.CSS_SELECTOR, ".label:contains('价格') + span").text,
-                "specs": {
-                    "CPU": item.find_element(By.CSS_SELECTOR, ".label:contains('CPU') + span").text,
-                    "内存": item.find_element(By.CSS_SELECTOR, ".label:contains('内存') + span").text,
-                    "存储": item.find_element(By.CSS_SELECTOR, ".label:contains('存储') + span").text
-                },
-                "link": item.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
-            })
+            # 等待可能出现的验证元素
+            self.wait.until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            time.sleep(random.uniform(1, 3))
+            
+            # 检查是否有验证框架
+            if len(self.driver.find_elements(By.CSS_SELECTOR, "iframe[src*='captcha'], .geetest_holder")) > 0:
+                logger.warning("检测到验证码框架，尝试绕过...")
+                time.sleep(5)
+                self.driver.execute_script("window.scrollBy(0, 500)")
+                time.sleep(2)
+                
         except Exception as e:
-            print(f"提取产品数据出错: {e}")
-    return products
-
-def crawl_with_selenium():
-    """使用Selenium爬取数据"""
-    driver = init_driver()
-    try:
-        # 1. 访问首页
-        print("访问首页...")
-        driver.get(BASE_URL)
-        wait_for_js_validation(driver)
-        simulate_human_interaction(driver)
-        
-        # 2. 爬取产品数据
-        print("\n爬取产品数据...")
+            logger.warning(f"JS验证等待异常: {str(e)}")
+    
+    def crawl_page(self, url):
+        """爬取目标页面"""
+        try:
+            logger.info(f"正在访问: {url}")
+            self.driver.get(url)
+            
+            # 处理验证和模拟行为
+            self._wait_for_js_validation()
+            self._human_like_interaction()
+            
+            # 确保内容加载
+            self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "body"))
+            time.sleep(random.uniform(1, 2))
+            
+            # 获取动态渲染后的页面源码
+            rendered_html = self.driver.page_source
+            
+            # 提取数据示例
+            data = {
+                "title": self.driver.title,
+                "url": self.driver.current_url,
+                "products": self._extract_products(),
+                "timestamp": int(time.time())
+            }
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"页面爬取失败: {str(e)}")
+            return None
+    
+    def _extract_products(self):
+        """提取产品数据"""
         products = []
-        page = 1
-        while True:
-            driver.get(f"{BASE_URL}/products?page={page}")
-            wait_for_js_validation(driver)
-            simulate_human_interaction(driver)
+        try:
+            items = self.wait.until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".product"))
             
-            # 提取当前页数据
-            page_products = extract_product_data(driver)
-            products.extend(page_products)
-            print(f"已获取第 {page} 页 {len(page_products)} 条产品数据")
-            
-            # 检查是否有下一页
-            try:
-                next_btn = driver.find_element(By.CSS_SELECTOR, ".pagination a:contains('下一页')")
-                next_btn.click()
-                page += 1
-                time.sleep(random.uniform(2, 4))
-            except:
-                break
+            for item in items:
+                try:
+                    product_data = {
+                        "name": item.find_element(By.CSS_SELECTOR, "h3").text,
+                        "price": item.find_element(By.CSS_SELECTOR, ".price").text,
+                        "link": item.find_element(By.CSS_SELECTOR, "a").get_attribute("href"),
+                        # 添加更多字段...
+                    }
+                    products.append(product_data)
+                except Exception as e:
+                    logger.warning(f"产品提取失败: {str(e)}")
+                    continue
+                    
+        except Exception as e:
+            logger.warning(f"产品列表提取失败: {str(e)}")
         
-        # 保存产品数据
-        with open(f"{OUTPUT_DIR}/products_selenium.json", 'w', encoding='utf-8') as f:
-            json.dump(products, f, ensure_ascii=False, indent=2)
-        
-        # 3. 爬取新闻数据 (类似实现)
-        # ...
-        
-    finally:
-        driver.quit()
+        return products
+    
+    def close(self):
+        """关闭浏览器"""
+        self.driver.quit()
+        logger.info("浏览器已关闭")
 
-if __name__ == '__main__':
-    crawl_with_selenium()
-    print("\n=== 爬取完成 ===")
+if __name__ == "__main__":
+    crawler = AntiDetectCrawler()
+    try:
+        # 示例爬取
+        target_url = "http://127.0.0.1"
+        result = crawler.crawl_page(target_url)
+        
+        if result:
+            logger.info(f"成功爬取数据: {json.dumps(result, indent=2, ensure_ascii=False)}")
+            with open("crawler_results.json", "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+        else:
+            logger.error("爬取失败，未获取有效数据")
+            
+    finally:
+        crawler.close()
